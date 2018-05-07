@@ -254,15 +254,13 @@ def train_and_save(encoder_input_data, decoder_input_data, optimizer, loss, logi
         print("iteration: {0}".format(str(iteration_i)))
 
         for epoch_i in range(epochs):
-            print("\tepoch: {0}".format(str(epoch_i)))
-
             batch_idx = np.random.choice(np.arange(encoder_input_data.shape[0]), size=batch_size)
             batch_x, batch_y = encoder_input_data[batch_idx, :], decoder_input_data[batch_idx,]
 
             for batch_i, (source_batch, target_batch) in enumerate([(batch_x, batch_y)]):
                 _, batch_loss, batch_logits = session.run([optimizer, loss, logits], feed_dict={inputs:(source_batch[:,:max([np.where(np.array(batch) == 2)[0][0] for batch in batch_x]) + 1]), outputs:target_batch[:, :-1], targets:target_batch[:, 1:], keep_rate:[0.8]})
             accuracy = np.mean(batch_logits.argmax(axis=-1) == target_batch[:, 1:])
-        print('Epoch {:3} Loss: {:>6.3f} Accuracy: {:>6.4f}'.format(epoch_i, batch_loss, accuracy))
+            print('\tEpoch {:3} Loss: {:>6.3f} Accuracy: {:>6.4f}'.format(epoch_i, batch_loss, accuracy))
 
         if (not(iteration_i % 10)):
             try:
