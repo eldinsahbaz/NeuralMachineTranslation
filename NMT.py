@@ -248,6 +248,7 @@ def build_model(num_encoder_tokens, num_decoder_tokens, original_vocab_length, t
 
 def train_and_save(encoder_input_data, decoder_input_data, optimizer, loss, logits, keep_rate, epochs, batch_size, inputs, outputs, targets, session, modelDir, modelFileName, saver):
     session.run(tf.global_variables_initializer())
+    iterations = 10
 
     for iteration_i in range(iterations):
         for epoch_i in range(epochs):
