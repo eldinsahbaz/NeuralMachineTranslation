@@ -251,7 +251,11 @@ def train_and_save(encoder_input_data, decoder_input_data, optimizer, loss, logi
     iterations = 10
 
     for iteration_i in range(iterations):
+        print("iteration: {0}".format(str(iteration_i)))
+
         for epoch_i in range(epochs):
+            print("\tepoch: {0}".format(str(epoch_i)))
+
             batch_idx = np.random.choice(np.arange(encoder_input_data.shape[0]), size=batch_size)
             batch_x, batch_y = encoder_input_data[batch_idx, :], decoder_input_data[batch_idx,]
 
@@ -326,7 +330,7 @@ def testWrapper():
     test(encoder_input_data_test, decoder_input_data_test, params['original_DNS'], params['translated_DNS'], params['max_original_length'], params['max_translated_length'], params['nodes'], params['embed_size'], params['batch_size'], modelDir, modelFileName)
 
 def train(modelDir, modelFileName):
-    epochs = 100
+    epochs = 50
     batch_size = 128
     nodes = 256
     embed_size = 300
