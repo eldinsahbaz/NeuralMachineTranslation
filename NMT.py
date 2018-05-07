@@ -249,16 +249,17 @@ def build_model(num_encoder_tokens, num_decoder_tokens, original_vocab_length, t
 def train_and_save(encoder_input_data, decoder_input_data, optimizer, loss, logits, keep_rate, epochs, batch_size, inputs, outputs, targets, session, modelDir, modelFileName, saver):
     session.run(tf.global_variables_initializer())
 
-    for epoch_i in range(epochs):
-        batch_idx = np.random.choice(np.arange(encoder_input_data.shape[0]), size=batch_size)
-        batch_x, batch_y = encoder_input_data[batch_idx, :], decoder_input_data[batch_idx,]
+    for iteration_i in range(iterations):
+        for epoch_i in range(epochs):
+            batch_idx = np.random.choice(np.arange(encoder_input_data.shape[0]), size=batch_size)
+            batch_x, batch_y = encoder_input_data[batch_idx, :], decoder_input_data[batch_idx,]
 
-        for batch_i, (source_batch, target_batch) in enumerate([(batch_x, batch_y)]):
-            _, batch_loss, batch_logits = session.run([optimizer, loss, logits], feed_dict={inputs:(source_batch[:,:max([np.where(np.array(batch) == 2)[0][0] for batch in batch_x]) + 1]), outputs:target_batch[:, :-1], targets:target_batch[:, 1:], keep_rate:[0.8]})
-        accuracy = np.mean(batch_logits.argmax(axis=-1) == target_batch[:, 1:])
+            for batch_i, (source_batch, target_batch) in enumerate([(batch_x, batch_y)]):
+                _, batch_loss, batch_logits = session.run([optimizer, loss, logits], feed_dict={inputs:(source_batch[:,:max([np.where(np.array(batch) == 2)[0][0] for batch in batch_x]) + 1]), outputs:target_batch[:, :-1], targets:target_batch[:, 1:], keep_rate:[0.8]})
+            accuracy = np.mean(batch_logits.argmax(axis=-1) == target_batch[:, 1:])
         print('Epoch {:3} Loss: {:>6.3f} Accuracy: {:>6.4f}'.format(epoch_i, batch_loss, accuracy))
 
-        if (not(epoch_i % 10)):
+        if (not(iteration_i % 10)):
             try:
                 save_path = saver.save(session, (modelDir + modelFileName))
             except:
