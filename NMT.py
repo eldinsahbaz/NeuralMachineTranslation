@@ -28,6 +28,7 @@ processed_original = "translated_numeric.txt"
 processed_translated  = "original_numeric.txt"
 modelDir = './model/'
 modelFileName = 'Eldin_Sahbaz_Model.ckpt'
+
 '''
 def filter_symbols(original_input, translated_input):
     try:
@@ -48,6 +49,7 @@ def filter_symbols_test(input_text):
         return two(input_text)
     except:
         return None
+
 '''
 
 def filter_symbols(original_input, translated_input):
@@ -61,10 +63,8 @@ def filter_symbols(original_input, translated_input):
         two = lambda text: nltk.word_tokenize(one(text))
         three_1 = lambda text: list(filter(lambda x: x, [lemmatizer.lemmatize(word1.translate(table)) for word1 in two(text) if ((word1 not in stop_words))]))
         three_2 = lambda text: list(filter(lambda x: x, [lemmatizer.lemmatize(word1.translate(table)) for word1 in two(text)]))
-        four_1 = lambda text: list(' '.join(three_1(text)))
-        four_2 = lambda text: list(' '.join(three_2(text)))
 
-        return (four_1(original_input), four_2(translated_input))
+        return (three_1(original_input), three_2(translated_input))
     except:
         return None
 
@@ -78,8 +78,8 @@ def filter_symbols_test(input_text):
         one = lambda text: re.sub('\.\.\.', '.', zero(text))
         two = lambda text: nltk.word_tokenize(one(text))
         three = lambda text: list(filter(lambda x: x, [lemmatizer.lemmatize(word1.translate(table)) for word1 in two(text) if ((word1 not in stop_words))]))
-        four = lambda text: list(' '.join(three(text)))
-        return(four(input_text))
+
+        return(three(input_text))
     except:
         return None
 
@@ -205,10 +205,8 @@ def convert_text_test(original_text, translated_text, original_DNS, translated_D
         temp_sentence = list()
         temp_sentence.append(original_DNS['forward']['<GO>'])
         for word in sentence:
-            try:
-                temp_sentence.append(original_DNS['forward'][word])
-            except:
-                temp_sentence.append(original_DNS['forward']['<UNK>'])
+            try: temp_sentence.append(original_DNS['forward'][word])
+            except: temp_sentence.append(original_DNS['forward']['<UNK>'])
         temp_sentence.append(original_DNS['forward']['<EOS>'])
         converted_original.append(temp_sentence)
 
@@ -216,10 +214,8 @@ def convert_text_test(original_text, translated_text, original_DNS, translated_D
         temp_sentence = list()
         temp_sentence.append(translated_DNS['forward']['<GO>'])
         for word in sentence:
-            try:
-                temp_sentence.append(translated_DNS['forward'][word])
-            except:
-                temp_sentence.append(translated_DNS['forward']['<UNK>'])
+            try: temp_sentence.append(translated_DNS['forward'][word])
+            except: temp_sentence.append(translated_DNS['forward']['<UNK>'])
         temp_sentence.append(translated_DNS['forward']['<EOS>'])
         converted_translated.append(temp_sentence)
 
@@ -250,6 +246,7 @@ def build_model(num_encoder_tokens, num_decoder_tokens, original_vocab_length, t
     outputs = tf.placeholder(tf.int32, (None, None), 'output')
     targets = tf.placeholder(tf.int32, (None, None), 'targets')
     keep_rate = tf.placeholder(tf.float32, (1), 'keep_rate')
+    decoder_size = tf.placeholder(tf.int32, (1), 'decoder_size')
 
     #embedding
     input_embedding = tf.Variable(tf.random_uniform((original_vocab_length, embed_size), -1.0, 1.0), name='enc_embedding')
@@ -275,14 +272,14 @@ def build_model(num_encoder_tokens, num_decoder_tokens, original_vocab_length, t
     logits = tf.layers.dense(prev_input, units=translated_vocab_length, use_bias=True)
 
     #optimizing
-    loss = tf.contrib.seq2seq.sequence_loss(logits, targets, tf.ones([batch_size, (num_decoder_tokens-1)]))
+    loss = tf.contrib.seq2seq.sequence_loss(logits, targets, tf.ones([batch_size, (decoder_size[0]-1)]))
     optimizer = tf.train.RMSPropOptimizer(1e-3).minimize(loss)
 
-    return (optimizer, loss, logits, inputs, outputs, targets, keep_rate, input_embedding, output_embedding, encoder_embedding, decoder_embedding)
+    return (optimizer, loss, logits, inputs, outputs, targets, keep_rate, input_embedding, output_embedding, encoder_embedding, decoder_embedding, decoder_size)
 
-def train_and_save(encoder_input_data, decoder_input_data, optimizer, loss, logits, keep_rate, epochs, batch_size, inputs, outputs, targets, session, modelDir, modelFileName, saver):
+def train_and_save(encoder_input_data, decoder_input_data, optimizer, loss, logits, keep_rate, epochs, batch_size, inputs, outputs, targets, decoder_size, session, modelDir, modelFileName, saver):
     session.run(tf.global_variables_initializer())
-    iterations = 10
+    iterations = 100
 
     for iteration_i in range(iterations):
         print("iteration: {0}".format(str(iteration_i)))
@@ -292,8 +289,13 @@ def train_and_save(encoder_input_data, decoder_input_data, optimizer, loss, logi
             batch_x, batch_y = encoder_input_data[batch_idx, :], decoder_input_data[batch_idx,]
 
             for batch_i, (source_batch, target_batch) in enumerate([(batch_x, batch_y)]):
-                _, batch_loss, batch_logits = session.run([optimizer, loss, logits], feed_dict={inputs:(source_batch[:,:max([np.where(np.array(batch) == 2)[0][0] for batch in batch_x]) + 1]), outputs:target_batch[:, :-1], targets:target_batch[:, 1:], keep_rate:[0.8]})
+                source_batch = (source_batch[:, min([np.where(np.array(batch) == 2)[0][0] for batch in source_batch]):])
+                target_batch = (target_batch[:, :(max([np.where(np.array(batch) == 2)[0][0] for batch in target_batch]) + 1)])
+
+                _, batch_loss, batch_logits = session.run([optimizer, loss, logits], feed_dict={inputs:source_batch, outputs:target_batch[:, :-1], targets:target_batch[:, 1:], keep_rate:[0.8], decoder_size:[target_batch.shape[1]]})
             accuracy = np.mean(batch_logits.argmax(axis=-1) == target_batch[:, 1:])
+            #print("predicted", batch_logits.argmax(axis=-1))
+            #print("actual", target_batch[:, 1:])
             print('\tEpoch {:3} Loss: {:>6.3f} Accuracy: {:>6.4f}'.format(epoch_i, batch_loss, accuracy))
 
         if (not(iteration_i % 10)):
@@ -334,7 +336,7 @@ def prepare_decoder_data(input_text, max_length):
     return decoder_target_data
 
 def test(original, translation, original_DNS, translated_DNS, max_original_length, max_translated_length, nodes, embed_size, batch_size, modelDir, modelFileName):
-    optimizer, loss, logits, inputs, outputs, targets, keep_rate, input_embedding, output_embedding, encoder_embedding, decoder_embedding = build_model(max_original_length, max_translated_length, len(original_DNS['forward']), len(translated_DNS['forward']), embed_size, nodes, batch_size)
+    optimizer, loss, logits, inputs, outputs, targets, keep_rate, input_embedding, output_embedding, encoder_embedding, decoder_embedding, decoder_size = build_model(max_original_length, max_translated_length, len(original_DNS['forward']), len(translated_DNS['forward']), embed_size, nodes, batch_size)
     saver = tf.train.Saver()
 
     with tf.device('/device:GPU:0'), tf.Session(config =tf.ConfigProto(allow_soft_placement=True)) as session:
@@ -351,7 +353,7 @@ def test(original, translation, original_DNS, translated_DNS, max_original_lengt
             batch_logits = session.run(logits, feed_dict={inputs: [np.trim_zeros(original[0])], outputs: [dec_input], keep_rate:[1.0]})
             dec_input[i] = batch_logits[:, -1].argmax(axis=-1)[0]
             if translated_DNS['backward'][dec_input[i]] == '<EOS>': break
-        print(''.join([translated_DNS['backward'][x] for x in dec_input]))
+        print(' '.join([translated_DNS['backward'][x] for x in dec_input]))
         #    dec_input = np.hstack([dec_input, prediction[:, None]])
         #print('Accuracy on test set is: {:>6.3f}'.format(np.mean(dec_input == target_batch)))
 
@@ -365,8 +367,8 @@ def testWrapper():
     test(encoder_input_data_test, decoder_input_data_test, params['original_DNS'], params['translated_DNS'], params['max_original_length'], params['max_translated_length'], params['nodes'], params['embed_size'], params['batch_size'], modelDir, modelFileName)
 
 def train(modelDir, modelFileName):
-    epochs = 50
-    batch_size = 128
+    epochs = 500
+    batch_size = 1
     nodes = 256
     embed_size = 300
 
@@ -376,10 +378,10 @@ def train(modelDir, modelFileName):
         original_DNS, translated_DNS, encoder_input_data, decoder_input_data, max_original_length, max_translated_length, min_length, unk_original_limit, unk_translated_limit = convert_text(processed_original, processed_translated, 15)
         encoder_input_data = np.array([x for x in encoder_input_data])
         decoder_input_data = np.array([np.array(x) for x in decoder_input_data])
-        optimizer, loss, logits, inputs, outputs, targets, keep_rate, input_embedding, output_embedding, encoder_embedding, decoder_embedding = build_model(max_original_length, max_translated_length, len(original_DNS['forward']), len(translated_DNS['forward']), embed_size, nodes, batch_size)
+        optimizer, loss, logits, inputs, outputs, targets, keep_rate, input_embedding, output_embedding, encoder_embedding, decoder_embedding, decoder_size = build_model(max_original_length, max_translated_length, len(original_DNS['forward']), len(translated_DNS['forward']), embed_size, nodes, batch_size)
 
         saver = tf.train.Saver()
-        train_and_save(encoder_input_data, decoder_input_data, optimizer, loss, logits, keep_rate, epochs, batch_size, inputs, outputs, targets, session, modelDir, modelFileName, saver)
+        train_and_save(encoder_input_data, decoder_input_data, optimizer, loss, logits, keep_rate, epochs, batch_size, inputs, outputs, targets, decoder_size, session, modelDir, modelFileName, saver)
         with open((modelDir + 'parameters.txt'), 'wb') as file:
             pickle.dump({'original_DNS': original_DNS, 'translated_DNS': translated_DNS, 'max_original_length':max_original_length, 'max_translated_length': max_translated_length, 'min_length':min_length, 'batch_size':batch_size, 'nodes':nodes, 'embed_size':embed_size}, file)
 
