@@ -265,9 +265,11 @@ def train_and_save(encoder_input_data, decoder_input_data, optimizer, loss, logi
         if (not(iteration_i % 10)):
             try:
                 save_path = saver.save(session, (modelDir + str(iteration_i) + modelFileName))
+                save_path = saver.save(session, (modelDir + modelFileName))
             except:
                 os.makedirs(modelDir)
                 save_path = saver.save(session, (modelDir + str(iteration_i) + modelFileName))
+                save_path = saver.save(session, (modelDir + modelFileName))
 
         print("save path: {0}".format(save_path))
 
