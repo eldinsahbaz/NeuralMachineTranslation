@@ -28,7 +28,7 @@ processed_original = "translated_numeric.txt"
 processed_translated  = "original_numeric.txt"
 modelDir = './model/'
 modelFileName = 'Eldin_Sahbaz_Model.ckpt'
-
+'''
 def filter_symbols(original_input, translated_input):
     try:
         zero = lambda text: contractions.fix(text.lower())
@@ -46,6 +46,40 @@ def filter_symbols_test(input_text):
         two = lambda text: list(one(text)) #[character for character in list(one(text)) if (character not in ['-', '\\', '/', '.', '—', '…', '...', '?', ',', '<', '>', '\"', ';', ':', '[', ']', '{', '}', '|', '=', '+', '_', '*', '&', '^', '%', '$', '#', '@', '!', '`', '~'])]
 
         return two(input_text)
+    except:
+        return None
+'''
+
+def filter_symbols(original_input, translated_input):
+    stop_words = set(stopwords.words('english'))
+    lemmatizer = WordNetLemmatizer()
+    table = str.maketrans({key: None for key in string.punctuation})
+
+    try:
+        zero = lambda text: contractions.fix(text.lower())
+        one = lambda text: re.sub('\.\.\.', '.', zero(text))
+        two = lambda text: nltk.word_tokenize(one(text))
+        three_1 = lambda text: list(filter(lambda x: x, [lemmatizer.lemmatize(word1.translate(table)) for word1 in two(text) if ((word1 not in stop_words))]))
+        three_2 = lambda text: list(filter(lambda x: x, [lemmatizer.lemmatize(word1.translate(table)) for word1 in two(text)]))
+        four_1 = lambda text: list(' '.join(three_1(text)))
+        four_2 = lambda text: list(' '.join(three_2(text)))
+
+        return (four_1(original_input), four_2(translated_input))
+    except:
+        return None
+
+def filter_symbols_test(input_text):
+    stop_words = set(stopwords.words('english'))
+    lemmatizer = WordNetLemmatizer()
+    table = str.maketrans({key: None for key in string.punctuation})
+
+    try:
+        zero = lambda text: contractions.fix(text.lower())
+        one = lambda text: re.sub('\.\.\.', '.', zero(text))
+        two = lambda text: nltk.word_tokenize(one(text))
+        three = lambda text: list(filter(lambda x: x, [lemmatizer.lemmatize(word1.translate(table)) for word1 in two(text) if ((word1 not in stop_words))]))
+        four = lambda text: list(' '.join(three(text)))
+        return(four(input_text))
     except:
         return None
 
@@ -303,7 +337,7 @@ def test(original, translation, original_DNS, translated_DNS, max_original_lengt
     optimizer, loss, logits, inputs, outputs, targets, keep_rate, input_embedding, output_embedding, encoder_embedding, decoder_embedding = build_model(max_original_length, max_translated_length, len(original_DNS['forward']), len(translated_DNS['forward']), embed_size, nodes, batch_size)
     saver = tf.train.Saver()
 
-    with tf.device('/device:CPU:0'), tf.Session() as session:
+    with tf.device('/device:GPU:0'), tf.Session(config =tf.ConfigProto(allow_soft_placement=True)) as session:
         saver.restore(session, (modelDir + modelFileName))
 
         source_batch = np.array(np.array_split(original, batch_size))
@@ -313,6 +347,7 @@ def test(original, translation, original_DNS, translated_DNS, max_original_lengt
         dec_input[0] = translated_DNS['forward']['<GO>']
 
         for i in range(1, max_translated_length):
+            print(i, max_translated_length)
             batch_logits = session.run(logits, feed_dict={inputs: [np.trim_zeros(original[0])], outputs: [dec_input], keep_rate:[1.0]})
             dec_input[i] = batch_logits[:, -1].argmax(axis=-1)[0]
             if translated_DNS['backward'][dec_input[i]] == '<EOS>': break
@@ -337,7 +372,7 @@ def train(modelDir, modelFileName):
 
     processed_original, processed_translated = clean_data(train_original, train_translated)
 
-    with tf.device('/device:CPU:0'), tf.Session() as session:
+    with tf.device('/device:GPU:0'), tf.Session(config =tf.ConfigProto(allow_soft_placement=True)) as session:
         original_DNS, translated_DNS, encoder_input_data, decoder_input_data, max_original_length, max_translated_length, min_length, unk_original_limit, unk_translated_limit = convert_text(processed_original, processed_translated, 15)
         encoder_input_data = np.array([x for x in encoder_input_data])
         decoder_input_data = np.array([np.array(x) for x in decoder_input_data])
