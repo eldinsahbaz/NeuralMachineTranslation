@@ -239,7 +239,7 @@ def convert_text_test(original_text, translated_text, original_DNS, translated_D
 
 def build_model(num_encoder_tokens, num_decoder_tokens, original_vocab_length, translated_vocab_length, embed_size, nodes, batch_size):
     num_encoder_layers = 2
-    num_decoder_layers = 2
+    num_decoder_layers = 5
 
     #inputs
     inputs = tf.placeholder(tf.int32, (None, None), 'inputs') #num_encoder_tokens
@@ -294,17 +294,15 @@ def train_and_save(encoder_input_data, decoder_input_data, optimizer, loss, logi
 
                 _, batch_loss, batch_logits = session.run([optimizer, loss, logits], feed_dict={inputs:source_batch, outputs:target_batch[:, :-1], targets:target_batch[:, 1:], keep_rate:[0.8], decoder_size:[target_batch.shape[1]]})
             accuracy = np.mean(batch_logits.argmax(axis=-1) == target_batch[:, 1:])
-            #print("predicted", batch_logits.argmax(axis=-1))
-            #print("actual", target_batch[:, 1:])
             print('\tEpoch {:3} Loss: {:>6.3f} Accuracy: {:>6.4f}'.format(epoch_i, batch_loss, accuracy))
 
         if (not(iteration_i % 10)):
             try:
-                save_path = saver.save(session, (modelDir + str(iteration_i) + modelFileName))
+                saver.save(session, (modelDir + str(iteration_i) + modelFileName))
                 save_path = saver.save(session, (modelDir + modelFileName))
             except:
                 os.makedirs(modelDir)
-                save_path = saver.save(session, (modelDir + str(iteration_i) + modelFileName))
+                saver.save(session, (modelDir + str(iteration_i) + modelFileName))
                 save_path = saver.save(session, (modelDir + modelFileName))
 
         print("save path: {0}".format(save_path))
@@ -358,9 +356,11 @@ def test(original, translation, original_DNS, translated_DNS, max_original_lengt
                 predicted = [translated_DNS['backward'][k] for k in dec_input]
                 actual = [translated_DNS['backward'][k] for k in np.trim_zeros(y)]
                 results.append((input, actual, predicted, (nltk.translate.bleu_score.sentence_bleu([actual], predicted, smoothing_function=sfun.method1) * 100)))
-                print(results[-1][-2], results[-1][-1])
+                print(z, len(translation), results[-1][-1], results[-1][-2])
             else:
                 print(' '.join([translated_DNS['backward'][k] for k in dec_input][1:-1]))
+
+        if (not (isTranslate)): print(np.mean([x[-1] for x in results]))
 
 def testWrapper():
     with open((modelDir + 'parameters.txt'), 'rb') as file: params = pickle.loads(file.read())
@@ -370,7 +370,7 @@ def testWrapper():
 
 def train(modelDir, modelFileName):
     epochs = 200
-    batch_size = 32
+    batch_size = 64
     nodes = 256
     embed_size = 300
 
