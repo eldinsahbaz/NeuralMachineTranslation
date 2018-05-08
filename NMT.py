@@ -369,8 +369,8 @@ def testWrapper():
     test(encoder_input_data_test, decoder_input_data_test, params['original_DNS'], params['translated_DNS'], params['max_original_length'], params['max_translated_length'], params['nodes'], params['embed_size'], params['batch_size'], modelDir, modelFileName, 0)
 
 def train(modelDir, modelFileName):
-    epochs = 500
-    batch_size = 1
+    epochs = 200
+    batch_size = 32
     nodes = 256
     embed_size = 300
 
