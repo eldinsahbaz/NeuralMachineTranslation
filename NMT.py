@@ -345,7 +345,7 @@ def test(original, translation, original_DNS, translated_DNS, max_original_lengt
         source_batch = np.array(np.array_split(original, batch_size))
         target_batch = np.array(np.array_split(translation, batch_size))
 
-        dec_input = np.zeros(max_translated_length, dtype=int)
+        dec_input = np.ones(max_translated_length, dtype=int)
         dec_input[0] = translated_DNS['forward']['<GO>']
 
         for i in range(1, max_translated_length):
