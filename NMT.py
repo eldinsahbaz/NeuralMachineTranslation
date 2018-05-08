@@ -335,36 +335,38 @@ def prepare_decoder_data(input_text, max_length):
                 decoder_target_data[i, t - 1] = word_as_number
     return decoder_target_data
 
-def test(original, translation, original_DNS, translated_DNS, max_original_length, max_translated_length, nodes, embed_size, batch_size, modelDir, modelFileName):
+def test(original, translation, original_DNS, translated_DNS, max_original_length, max_translated_length, nodes, embed_size, batch_size, modelDir, modelFileName, isTranslate):
     optimizer, loss, logits, inputs, outputs, targets, keep_rate, input_embedding, output_embedding, encoder_embedding, decoder_embedding, decoder_size = build_model(max_original_length, max_translated_length, len(original_DNS['forward']), len(translated_DNS['forward']), embed_size, nodes, batch_size)
     saver = tf.train.Saver()
 
-    with tf.device('/device:GPU:0'), tf.Session(config =tf.ConfigProto(allow_soft_placement=True)) as session:
+    with tf.device('/device:GPU:0'), tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as session:
         saver.restore(session, (modelDir + modelFileName))
+        sfun = SmoothingFunction()
+        results = list()
 
-        source_batch = np.array(np.array_split(original, batch_size))
-        target_batch = np.array(np.array_split(translation, batch_size))
+        for z, (x, y) in enumerate(list(zip(original, translation))):
+            dec_input = np.array([])
+            dec_input = np.append(dec_input, translated_DNS['forward']['<GO>'])
 
-        dec_input = np.ones(max_translated_length, dtype=int)
-        dec_input[0] = translated_DNS['forward']['<GO>']
+            for i in range(1, max_translated_length):
+                batch_logits = session.run(logits, feed_dict={inputs: [np.trim_zeros(x)], outputs: [dec_input], keep_rate:[1.0], decoder_size:[dec_input.shape[0]]})
+                dec_input = np.append(dec_input, (batch_logits[:, -1].argmax(axis=-1)[0]))
+                if translated_DNS['backward'][dec_input[i]] == '<EOS>': break
 
-        for i in range(1, max_translated_length):
-            print(i, max_translated_length)
-            batch_logits = session.run(logits, feed_dict={inputs: [np.trim_zeros(original[0])], outputs: [dec_input], keep_rate:[1.0]})
-            dec_input[i] = batch_logits[:, -1].argmax(axis=-1)[0]
-            if translated_DNS['backward'][dec_input[i]] == '<EOS>': break
-        print(' '.join([translated_DNS['backward'][x] for x in dec_input]))
-        #    dec_input = np.hstack([dec_input, prediction[:, None]])
-        #print('Accuracy on test set is: {:>6.3f}'.format(np.mean(dec_input == target_batch)))
-
-        #sfun = SmoothingFunction()
-        #a = nltk.translate.bleu_score.sentence_bleu([translation.split()], translated.split(), smoothing_function=sfun.method1)*100
+            if (not(isTranslate)):
+                input = [original_DNS['backward'][k] for k in np.trim_zeros(x)]
+                predicted = [translated_DNS['backward'][k] for k in dec_input]
+                actual = [translated_DNS['backward'][k] for k in np.trim_zeros(y)]
+                results.append((input, actual, predicted, (nltk.translate.bleu_score.sentence_bleu([actual], predicted, smoothing_function=sfun.method1) * 100)))
+                print(results[-1][-2], results[-1][-1])
+            else:
+                print(' '.join([translated_DNS['backward'][k] for k in dec_input][1:-1]))
 
 def testWrapper():
     with open((modelDir + 'parameters.txt'), 'rb') as file: params = pickle.loads(file.read())
     processed_original_test, processed_translated_test = clean_data(test_original, test_translated)
     encoder_input_data_test, decoder_input_data_test = convert_text_test(processed_original_test, processed_translated_test, params['original_DNS'], params['translated_DNS'], params['max_original_length'], params['max_translated_length'])
-    test(encoder_input_data_test, decoder_input_data_test, params['original_DNS'], params['translated_DNS'], params['max_original_length'], params['max_translated_length'], params['nodes'], params['embed_size'], params['batch_size'], modelDir, modelFileName)
+    test(encoder_input_data_test, decoder_input_data_test, params['original_DNS'], params['translated_DNS'], params['max_original_length'], params['max_translated_length'], params['nodes'], params['embed_size'], params['batch_size'], modelDir, modelFileName, 0)
 
 def train(modelDir, modelFileName):
     epochs = 500
@@ -374,7 +376,7 @@ def train(modelDir, modelFileName):
 
     processed_original, processed_translated = clean_data(train_original, train_translated)
 
-    with tf.device('/device:GPU:0'), tf.Session(config =tf.ConfigProto(allow_soft_placement=True)) as session:
+    with tf.device('/device:GPU:0'), tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as session:
         original_DNS, translated_DNS, encoder_input_data, decoder_input_data, max_original_length, max_translated_length, min_length, unk_original_limit, unk_translated_limit = convert_text(processed_original, processed_translated, 15)
         encoder_input_data = np.array([x for x in encoder_input_data])
         decoder_input_data = np.array([np.array(x) for x in decoder_input_data])
@@ -388,7 +390,12 @@ def train(modelDir, modelFileName):
 def trainWrapper():
     train(modelDir, modelFileName)
 
+def translate():
+    with open((modelDir + 'parameters.txt'), 'rb') as file: params = pickle.loads(file.read())
+    while (1):
+        input_data = prep_test_data(input("> "), params['original_DNS'], params['max_original_length'])
+        test([input_data], [[None]], params['original_DNS'], params['translated_DNS'], params['max_original_length'], params['max_translated_length'], params['nodes'], params['embed_size'], params['batch_size'], modelDir, modelFileName, 1)
 
 if ((__name__ == '__main__') and (len(sys.argv) > 1)):
-    code = {'train': 0, 'test': 1}
-    {0 : trainWrapper, 1: testWrapper}[code[sys.argv[1]]]()
+    code = {'train': 0, 'test': 1, 'translate': 2}
+    {0 : trainWrapper, 1: testWrapper, 2: translate}[code[sys.argv[1]]]()
